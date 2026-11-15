@@ -1,6 +1,11 @@
 import AVFoundation
 import Foundation
 
+private struct LocalLibraryCache: Codable, Sendable {
+    let folder: String
+    let songs: [Song]
+}
+
 @MainActor final class LocalBackend {
     weak var store: PlayerStore?
     private let player = AVPlayer()
@@ -14,10 +19,12 @@ import Foundation
     private var scanTask: Task<Void, Never>?
     private var folderTask: Task<Void, Never>?
     private var folderRequestID = 0
+    private static let cacheFile = Settings.file.deletingLastPathComponent()
+        .appendingPathComponent("local-library.json")
 
     init() {
         timeObserver = player.addPeriodicTimeObserver(
-            forInterval: CMTime(seconds: 0.5, preferredTimescale: 600), queue: .main
+            forInterval: CMTime(seconds: 1, preferredTimescale: 600), queue: .main
         ) { [weak self] time in
             Task { @MainActor in self?.tick(time.seconds) }
         }
@@ -51,7 +58,7 @@ import Foundation
         store.status.random = store.settings.localRandom
         store.status.repeatQueue = store.settings.localRepeat
         store.status.consume = store.settings.localConsume
-        store.connectionText = "Local Files"
+        store.connectionText = "Local Files · \((store.settings.musicFolder as NSString).lastPathComponent)"
         store.browserPath = ""
         store.entries = []
         store.searchResults = []
@@ -62,6 +69,9 @@ import Foundation
         if libraryFolder == store.settings.musicFolder {
             browse("")
             store.message = "Local library: \(library.count.formatted()) tracks"
+        } else if loadCachedLibrary(for: store.settings.musicFolder) {
+            browse("")
+            store.message = "Local library: \(library.count.formatted()) cached tracks"
         } else {
             library = []
             libraryByFile = [:]
@@ -98,7 +108,25 @@ import Foundation
             libraryFolder = root
             store.message = "Local library: \(songs.count.formatted()) tracks"
             browse("")
+            let cacheFile = Self.cacheFile
+            Task.detached(priority: .utility) {
+                let cache = LocalLibraryCache(folder: root, songs: songs)
+                guard let data = try? JSONEncoder().encode(cache) else { return }
+                try? FileManager.default.createDirectory(at: cacheFile.deletingLastPathComponent(),
+                                                         withIntermediateDirectories: true)
+                try? data.write(to: cacheFile, options: .atomic)
+            }
         }
+    }
+
+    private func loadCachedLibrary(for folder: String) -> Bool {
+        guard let data = try? Data(contentsOf: Self.cacheFile),
+              let cache = try? JSONDecoder().decode(LocalLibraryCache.self, from: data),
+              cache.folder == folder, !cache.songs.isEmpty else { return false }
+        library = cache.songs
+        libraryByFile = Dictionary(uniqueKeysWithValues: cache.songs.map { ($0.file, $0) })
+        libraryFolder = folder
+        return true
     }
 
     private nonisolated static func readLibrary(_ folder: String) async -> [Song] {
@@ -381,6 +409,7 @@ import Foundation
         }
         let wasEmpty = store.queue.isEmpty
         let missing = max(0, target - store.queue.count)
+        guard missing > 0 else { return }
         var queued = Set(store.queue.map(\.file))
         for _ in 0..<missing {
             var chosen = library.randomElement()!
@@ -421,11 +450,12 @@ import Foundation
     private func tick(_ seconds: Double) {
         guard let store, store.settings.source == .local, store.status.songID >= 0,
               seconds.isFinite else { return }
-        store.status.elapsed = seconds
+        let elapsed = max(0, floor(seconds))
+        guard Int(elapsed) != Int(store.status.elapsed) else { return }
+        store.status.elapsed = elapsed
         if let duration = player.currentItem?.duration.seconds, duration.isFinite, duration > 0 {
             store.status.duration = duration
         }
-        publishPlayback()
     }
 
     private func publishPlayback() {

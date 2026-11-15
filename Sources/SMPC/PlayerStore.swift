@@ -63,10 +63,17 @@ enum Page: String, CaseIterable {
         worker = Task {
             var cycle = 0
             while !Task.isCancelled {
-                await refresh()
-                if settings.autoFill && cycle % 3 == 0 { await fill(to: settings.fillTarget, autoStart: true) }
-                cycle += 1
-                try? await Task.sleep(for: .seconds(2))
+                if isLocal {
+                    if settings.autoFill && queue.count < settings.fillTarget {
+                        await fill(to: settings.fillTarget, autoStart: true)
+                    }
+                    try? await Task.sleep(for: .seconds(10))
+                } else {
+                    await refresh()
+                    if settings.autoFill && cycle % 3 == 0 { await fill(to: settings.fillTarget, autoStart: true) }
+                    cycle += 1
+                    try? await Task.sleep(for: .seconds(3))
+                }
             }
         }
         if !isLocal { Task { await browse("") } }
@@ -83,8 +90,8 @@ enum Page: String, CaseIterable {
 
     func refresh() async {
         if isLocal {
-            connectionText = "Local Files · \(settings.musicFolder.isEmpty ? "choose folder" : (settings.musicFolder as NSString).lastPathComponent)"
-            MediaControls.shared.update(song: currentSong, status: status)
+            let text = "Local Files · \(settings.musicFolder.isEmpty ? "choose folder" : (settings.musicFolder as NSString).lastPathComponent)"
+            if connectionText != text { connectionText = text }
             return
         }
         do {
@@ -218,9 +225,9 @@ enum Page: String, CaseIterable {
         showSettings = false
         showAbout = false
         menuBarMode = true
+        MenuBarController.shared.show(window: window)
         DispatchQueue.main.async {
             window?.orderOut(nil)
-            MenuBarController.shared.show(window: window)
             NSApp.hide(nil)
         }
     }

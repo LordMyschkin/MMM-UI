@@ -28,3 +28,5 @@ The build creates `dist/MMM-UI.app`. It uses no external package dependencies. T
 - Local mode quits immediately and stops local playback. In MPD mode, MMM-UI can optionally ask whether to pause MPD. Queue filling stops when the app exits; MPD retains its queue.
 
 Settings and the local queue are stored in `~/Library/Application Support/s-mpc/settings.json` for compatibility with existing installations. Local and MPD shuffle settings are separate, and the local queue is restored when switching modes or restarting the app. On first launch, connection and display settings are read from A-mpd if present. Automatic filling starts disabled, so both apps can be installed without competing for the same queue. The MPD password remains in memory for the current session. Local files stay on this Mac; MMM-UI does not upload or index them in an external service.
+
+The local library index is cached in `~/Library/Application Support/s-mpc/local-library.json` after the first scan to avoid reading every audio file on each launch. Use **Rescan library** in Settings after adding, removing, or retagging local files.
