@@ -5,10 +5,18 @@ enum SourceMode: String, Codable {
     case mpd = "MPD Client"
 }
 
+struct MPDInstance: Codable, Hashable, Identifiable {
+    var host: String
+    var port: Int
+    var id: String { "\(host.lowercased()):\(port)" }
+    var label: String { "\(host):\(port)" }
+}
+
 struct Settings: Codable {
     var host = "127.0.0.1"
     var port = 6600
     var source = SourceMode.mpd
+    var recentMPD: [MPDInstance] = []
     var musicFolder = ""
     var localVolume = 0.5
     var localRandom = false
@@ -34,7 +42,7 @@ struct Settings: Codable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case host, port, source, musicFolder, localVolume, localRandom, localRepeat,
+        case host, port, source, recentMPD, musicFolder, localVolume, localRandom, localRepeat,
              localConsume, localAutoFill, localFillTarget, mpdAutoFill, mpdFillTarget, localQueue,
              autoFill, fillTarget, showFilePath, showTrackIsland, askPauseOnExit
     }
@@ -46,6 +54,8 @@ struct Settings: Codable {
         host = try container.decodeIfPresent(String.self, forKey: .host) ?? "127.0.0.1"
         port = try container.decodeIfPresent(Int.self, forKey: .port) ?? 6600
         source = try container.decodeIfPresent(SourceMode.self, forKey: .source) ?? .mpd
+        recentMPD = try container.decodeIfPresent([MPDInstance].self, forKey: .recentMPD) ?? []
+        if recentMPD.isEmpty { recentMPD = [MPDInstance(host: host, port: port)] }
         musicFolder = try container.decodeIfPresent(String.self, forKey: .musicFolder) ?? ""
         localVolume = try container.decodeIfPresent(Double.self, forKey: .localVolume) ?? 0.5
         localRandom = try container.decodeIfPresent(Bool.self, forKey: .localRandom) ?? false
@@ -72,6 +82,7 @@ struct Settings: Codable {
         try container.encode(host, forKey: .host)
         try container.encode(port, forKey: .port)
         try container.encode(source, forKey: .source)
+        try container.encode(recentMPD, forKey: .recentMPD)
         try container.encode(musicFolder, forKey: .musicFolder)
         try container.encode(localVolume, forKey: .localVolume)
         try container.encode(localRandom, forKey: .localRandom)
@@ -106,6 +117,7 @@ struct Settings: Codable {
         var settings = Settings()
         settings.host = values["Host"] as? String ?? settings.host
         settings.port = values["Port"] as? Int ?? settings.port
+        settings.recentMPD = [MPDInstance(host: settings.host, port: settings.port)]
         // Keep this off until the user enables it; A-mpd may still be filling the same queue.
         settings.mpdFillTarget = values["FillTarget"] as? Int ?? settings.mpdFillTarget
         settings.showFilePath = values["ShowFilePath"] as? Bool ?? settings.showFilePath
@@ -118,5 +130,14 @@ struct Settings: Codable {
                                                 withIntermediateDirectories: true)
         let data = try JSONEncoder().encode(self)
         try data.write(to: Self.file, options: .atomic)
+    }
+
+    mutating func rememberMPD() {
+        let cleanHost = host.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanHost.isEmpty else { return }
+        let instance = MPDInstance(host: cleanHost, port: min(65535, max(1, port)))
+        recentMPD.removeAll { $0.id == instance.id }
+        recentMPD.insert(instance, at: 0)
+        recentMPD = Array(recentMPD.prefix(5))
     }
 }

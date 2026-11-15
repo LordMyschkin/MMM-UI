@@ -2,7 +2,26 @@ import AppKit
 import SwiftUI
 
 final class SMPCDelegate: NSObject, NSApplicationDelegate {
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+    func applicationDidFinishLaunching(_ notification: Notification) { cleanMenus() }
+    func applicationDidBecomeActive(_ notification: Notification) { cleanMenus() }
+
+    private func cleanMenus() {
+        DispatchQueue.main.async {
+            guard let menu = NSApp.mainMenu else { return }
+            for title in ["Edit", "Format"] {
+                if let item = menu.items.first(where: { $0.title == title }) { menu.removeItem(item) }
+            }
+        }
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        !PlayerStore.shared.menuBarMode
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
+        if PlayerStore.shared.menuBarMode { MenuBarController.shared.restoreWindow() }
+        return true
+    }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         let store = PlayerStore.shared
@@ -37,12 +56,17 @@ final class SMPCDelegate: NSObject, NSApplicationDelegate {
     @NSApplicationDelegateAdaptor(SMPCDelegate.self) private var delegate
 
     var body: some Scene {
-        WindowGroup("MMM-UI") {
+        Window("MMM-UI", id: "main") {
             MainView()
                 .frame(minWidth: 820, minHeight: 480)
         }
         .defaultSize(width: 1120, height: 700)
         .commands {
+            CommandGroup(replacing: .newItem) {}
+            CommandGroup(replacing: .undoRedo) {}
+            CommandGroup(replacing: .pasteboard) {}
+            CommandGroup(replacing: .textEditing) {}
+            CommandGroup(replacing: .textFormatting) {}
             CommandGroup(replacing: .appInfo) {
                 Button("About Martins MacOS Music UI") { PlayerStore.shared.showAboutDialog() }
             }
@@ -51,6 +75,9 @@ final class SMPCDelegate: NSObject, NSApplicationDelegate {
                 Button("Local Files…") { PlayerStore.shared.selectLocalFiles() }
                 Button("MPD Client") { PlayerStore.shared.selectMPDClient() }
                 Button("Choose Music Folder…") { PlayerStore.shared.chooseMusicFolder() }
+                Divider()
+                Button("Move to Menu Bar") { PlayerStore.shared.moveToMenuBar() }
+                Button("Show Main Window") { MenuBarController.shared.restoreWindow() }
                 Divider()
                 Button("Settings…") { PlayerStore.shared.showSettings = true }
                     .keyboardShortcut(",", modifiers: [.command])
@@ -70,5 +97,44 @@ final class SMPCDelegate: NSObject, NSApplicationDelegate {
                     .keyboardShortcut(.rightArrow, modifiers: [.command])
             }
         }
+
     }
+}
+
+@MainActor final class MenuBarController: NSObject {
+    static let shared = MenuBarController()
+    private var item: NSStatusItem?
+    private var mainWindow: NSWindow?
+
+    func show(window: NSWindow?) {
+        guard item == nil else { return }
+        mainWindow = window
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        item.button?.title = "♫"
+        item.button?.font = NSFont.systemFont(ofSize: 16, weight: .medium)
+        item.button?.toolTip = "MMM-UI · Show main window"
+        item.button?.target = self
+        item.button?.action = #selector(showWindow)
+        item.isVisible = true
+        self.item = item
+    }
+
+    @objc private func showWindow() { restoreWindow() }
+
+    func restoreWindow() {
+        guard PlayerStore.shared.menuBarMode else { return }
+        let window = mainWindow ?? NSApp.windows.first(where: { $0.title == "MMM-UI" })
+        NSApp.setActivationPolicy(.regular)
+        NSApp.unhide(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        window?.makeKeyAndOrderFront(nil)
+        window?.orderFrontRegardless()
+        DispatchQueue.main.async {
+            PlayerStore.shared.menuBarMode = false
+            if let item = self.item { NSStatusBar.system.removeStatusItem(item) }
+            self.item = nil
+            self.mainWindow = nil
+        }
+    }
+
 }

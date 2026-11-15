@@ -88,10 +88,23 @@ struct MainView: View {
             }
             Spacer()
             ActionButton(title: "ⓘ") { store.showAboutDialog() }
-            Text(store.connectionText)
+            Menu {
+                Button("Local Files…") { store.selectLocalFiles() }
+                Button("MPD Client") { store.selectMPDClient() }
+                Divider()
+                Button("Choose Music Folder…") { store.chooseMusicFolder() }
+            } label: {
+                HStack(spacing: 6) {
+                    Text(store.connectionText).lineLimit(1)
+                    Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold))
+                }
                 .font(.system(size: 11)).foregroundStyle(Palette.accent)
                 .padding(.horizontal, 11).padding(.vertical, 7)
                 .background(Color(hex: 0x202D39), in: RoundedRectangle(cornerRadius: 9))
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .help("Switch playback source")
         }
     }
 
@@ -288,6 +301,23 @@ struct MainView: View {
                     }
                 } else {
                     Text("Connection").font(.system(size: 18, weight: .bold))
+                    Picker("Recent MPD servers", selection: Binding(
+                        get: {
+                            let current = MPDInstance(host: store.settings.host, port: store.settings.port).id
+                            return store.settings.recentMPD.contains { $0.id == current } ? current : ""
+                        },
+                        set: { id in
+                            if let instance = store.settings.recentMPD.first(where: { $0.id == id }) {
+                                store.useMPDInstance(instance)
+                            }
+                        }
+                    )) {
+                        Text("Custom connection").tag("")
+                        ForEach(store.settings.recentMPD) { instance in
+                            Text(instance.label).tag(instance.id)
+                        }
+                    }
+                    .pickerStyle(.menu)
                     HStack {
                         VStack(alignment: .leading) {
                             Text("MPD host").foregroundStyle(Palette.muted)

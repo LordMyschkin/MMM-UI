@@ -24,6 +24,7 @@ enum Page: String, CaseIterable {
     @Published var message = "Ready"
     @Published var showAbout = false
     @Published var showSettings = false
+    @Published var menuBarMode = false
     @Published var statistics: MPDStatistics?
     @Published var isFilling = false
     @Published var seekDraft = 0.0
@@ -91,7 +92,7 @@ enum Page: String, CaseIterable {
             let fresh = try await mpd.status()
             guard !isLocal else { return }
             status = fresh
-            connectionText = "Connected · \(settings.host):\(settings.port)"
+            connectionText = "MPD Client · \(settings.host):\(settings.port)"
             if fresh.songID != lastSongID {
                 let wasConnected = lastSongID != Int.min
                 let song = try await mpd.currentSong()
@@ -111,7 +112,7 @@ enum Page: String, CaseIterable {
             MediaControls.shared.update(song: currentSong, status: fresh)
         } catch {
             guard !isLocal else { return }
-            connectionText = "Disconnected"
+            connectionText = "MPD Client · Disconnected"
             message = error.localizedDescription
             MediaControls.shared.clearInfo()
         }
@@ -186,6 +187,7 @@ enum Page: String, CaseIterable {
         local.deactivate()
         message = "Switching to MPD client…"
         settings.source = .mpd
+        settings.rememberMPD()
         do { try settings.save() } catch { message = error.localizedDescription }
         status = MPDStatus([:])
         queue = []
@@ -196,6 +198,31 @@ enum Page: String, CaseIterable {
         lastQueueVersion = Int.min
         page = .queue
         Task { await refresh(); await browse("") }
+    }
+
+    func useMPDInstance(_ instance: MPDInstance) {
+        guard !isLocal else { return }
+        if settings.host != instance.host || settings.port != instance.port { password = "" }
+        settings.host = instance.host
+        settings.port = instance.port
+        settings.rememberMPD()
+        do { try settings.save() } catch { message = error.localizedDescription }
+        lastSongID = Int.min
+        lastQueueVersion = Int.min
+        Task { await refresh(); await browse("") }
+    }
+
+    func moveToMenuBar() {
+        guard !menuBarMode else { return }
+        let window = NSApp.windows.first { $0.title == "MMM-UI" }
+        showSettings = false
+        showAbout = false
+        menuBarMode = true
+        DispatchQueue.main.async {
+            window?.orderOut(nil)
+            MenuBarController.shared.show(window: window)
+            NSApp.hide(nil)
+        }
     }
 
     func playPause() {
@@ -235,6 +262,7 @@ enum Page: String, CaseIterable {
         settings.port = min(65535, max(1, settings.port))
         settings.fillTarget = min(500, max(1, settings.fillTarget))
         if settings.host.trimmingCharacters(in: .whitespaces).isEmpty { settings.host = "127.0.0.1" }
+        if !isLocal { settings.rememberMPD() }
         do { try settings.save(); message = "Settings saved" }
         catch { message = error.localizedDescription }
         if isLocal {
