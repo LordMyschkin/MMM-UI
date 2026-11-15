@@ -18,7 +18,7 @@ The build creates `dist/MMM-UI.app`. It uses no external package dependencies. T
 - Double-click a queue row to play; drag a row to reorder it.
 - Choose **Local Files…** or **MPD Client** from the first macOS menu, **MMM-UI**. Local mode works without an MPD server and reads audio files recursively from a chosen folder. You can change the folder from the same menu.
 - Click the source badge at the top right of the window to switch modes. In MPD settings, the **Recent MPD servers** menu keeps the five most recently selected host and port combinations.
-- Choose **Move to Menu Bar** from the **MMM-UI** menu to hide the window while playback and queue filling continue. Click the **♫** icon in the macOS menu bar to restore the main window. If macOS has no space to show the status icon, click MMM-UI in the Dock to restore the window. **Show Main Window** is also available in the app menu. Closing the regular window still quits the app.
+- Choose **Move to Menu Bar** from the **MMM-UI** menu to hide the window while playback and queue filling continue. The music-note icon opens a menu with **Show Main Window**, playback controls, and **Quit MMM-UI**. On macOS 26 and newer, allow MMM-UI in **System Settings → Menu Bar → Allow in the Menu Bar**. Clicking MMM-UI in the Dock also restores the window if macOS does not show the icon. Closing the regular window still quits the app.
 - Use Queue, Library, and Search from **Navigate**. Open the separate **Settings…** popup from **MMM-UI** (⌘,).
 - The **Playback** menu and macOS media keys control the active player in either mode.
 - Search **Next** inserts behind the current track. The Library offers Next and Add.

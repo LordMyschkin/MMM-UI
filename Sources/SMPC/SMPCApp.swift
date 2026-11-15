@@ -98,43 +98,51 @@ final class SMPCDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
+        MenuBarExtra("MMM-UI", systemImage: "music.note") {
+            MenuBarControls()
+        }
+        .menuBarExtraStyle(.menu)
+
+    }
+}
+
+private struct MenuBarControls: View {
+    @ObservedObject private var store = PlayerStore.shared
+
+    var body: some View {
+        Button("Show Main Window") { MenuBarController.shared.restoreWindow() }
+        Divider()
+        Text(store.currentSong?.displayTitle ?? "No track selected")
+        Button(store.status.state == "play" ? "Pause" : "Play") { store.playPause() }
+        Button("Previous Track") { store.previous() }
+        Button("Next Track") { store.next() }
+        Button("Stop") { store.stopPlayback() }
+        Divider()
+        Button("Quit MMM-UI") {
+            NSApp.setActivationPolicy(.regular)
+            NSApp.unhide(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            NSApp.terminate(nil)
+        }
     }
 }
 
 @MainActor final class MenuBarController: NSObject {
     static let shared = MenuBarController()
-    private var item: NSStatusItem?
     private var mainWindow: NSWindow?
 
     func show(window: NSWindow?) {
-        guard item == nil else { return }
-        mainWindow = window
-        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        item.button?.title = "♫"
-        item.button?.font = NSFont.systemFont(ofSize: 16, weight: .medium)
-        item.button?.toolTip = "MMM-UI · Show main window"
-        item.button?.target = self
-        item.button?.action = #selector(showWindow)
-        item.isVisible = true
-        self.item = item
+        if let window { mainWindow = window }
     }
 
-    @objc private func showWindow() { restoreWindow() }
-
     func restoreWindow() {
-        guard PlayerStore.shared.menuBarMode else { return }
         let window = mainWindow ?? NSApp.windows.first(where: { $0.title == "MMM-UI" })
         NSApp.setActivationPolicy(.regular)
         NSApp.unhide(nil)
         NSApp.activate(ignoringOtherApps: true)
         window?.makeKeyAndOrderFront(nil)
         window?.orderFrontRegardless()
-        DispatchQueue.main.async {
-            PlayerStore.shared.menuBarMode = false
-            if let item = self.item { NSStatusBar.system.removeStatusItem(item) }
-            self.item = nil
-            self.mainWindow = nil
-        }
+        PlayerStore.shared.menuBarMode = false
     }
 
 }
