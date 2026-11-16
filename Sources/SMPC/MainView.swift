@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 private enum Palette {
@@ -40,6 +41,56 @@ private struct ActionButton: View {
             .foregroundStyle(accent ? Color(hex: 0x172316) : Palette.text)
             .background(accent ? Palette.accent : Color(hex: 0x263443), in: RoundedRectangle(cornerRadius: 7))
             .overlay(RoundedRectangle(cornerRadius: 7).stroke(accent ? Palette.accent : Color(hex: 0x3A4A59)))
+    }
+}
+
+private final class FirstMouseNSButton: NSButton {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+}
+
+private struct FirstMousePlayerButton: NSViewRepresentable {
+    let symbol: String
+    let accent: Bool
+    let help: String
+    let action: () -> Void
+
+    final class Coordinator: NSObject {
+        var action: () -> Void
+        init(action: @escaping () -> Void) { self.action = action }
+        @objc func click() { action() }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(action: action) }
+
+    func makeNSView(context: Context) -> FirstMouseNSButton {
+        let button = FirstMouseNSButton()
+        button.isBordered = false
+        button.imagePosition = .imageOnly
+        button.imageScaling = .scaleProportionallyDown
+        button.focusRingType = .none
+        button.target = context.coordinator
+        button.action = #selector(Coordinator.click)
+        button.wantsLayer = true
+        button.layer?.cornerRadius = 9
+        button.layer?.borderWidth = 1
+        return button
+    }
+
+    func updateNSView(_ button: FirstMouseNSButton, context: Context) {
+        context.coordinator.action = action
+        button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: help)?
+            .withSymbolConfiguration(.init(pointSize: 16, weight: .bold))
+        button.contentTintColor = accent
+            ? NSColor(srgbRed: 23 / 255, green: 35 / 255, blue: 22 / 255, alpha: 1)
+            : NSColor(srgbRed: 238 / 255, green: 242 / 255, blue: 245 / 255, alpha: 1)
+        button.layer?.backgroundColor = accent
+            ? NSColor(srgbRed: 184 / 255, green: 243 / 255, blue: 107 / 255, alpha: 1).cgColor
+            : NSColor(srgbRed: 38 / 255, green: 52 / 255, blue: 67 / 255, alpha: 1).cgColor
+        button.layer?.borderColor = accent
+            ? NSColor(srgbRed: 184 / 255, green: 243 / 255, blue: 107 / 255, alpha: 1).cgColor
+            : NSColor(srgbRed: 58 / 255, green: 74 / 255, blue: 89 / 255, alpha: 1).cgColor
+        button.toolTip = help
+        button.setAccessibilityLabel(help)
     }
 }
 
@@ -165,15 +216,8 @@ struct MainView: View {
 
     private func playerButton(_ symbol: String, accent: Bool = false, help: String,
                               action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol).font(.system(size: 16, weight: .bold))
-                .frame(width: accent ? 41 : 37, height: accent ? 37 : 35)
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(accent ? Color(hex: 0x172316) : Palette.text)
-        .background(accent ? Palette.accent : Color(hex: 0x263443), in: RoundedRectangle(cornerRadius: 9))
-        .overlay(RoundedRectangle(cornerRadius: 9).stroke(accent ? Palette.accent : Color(hex: 0x3A4A59)))
-        .help(help)
+        FirstMousePlayerButton(symbol: symbol, accent: accent, help: help, action: action)
+            .frame(width: accent ? 41 : 37, height: accent ? 37 : 35)
     }
 
     @ViewBuilder private var mainPanel: some View {
